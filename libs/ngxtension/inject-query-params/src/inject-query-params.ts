@@ -38,6 +38,11 @@ export type QueryParamsOptions<ReadT, DefaultValueT> = ParseOptions<
 		 * @returns The transformed value.
 		 */
 		transform?: (v: string | null) => ReadT;
+		/**
+		 * When `true`, a runtime error is thrown if the query parameter is not present.
+		 * This also narrows the return type from `T | null` to `T`.
+		 */
+		required?: boolean;
 	};
 
 /**
@@ -54,6 +59,20 @@ export function injectQueryParams(): Signal<Params>;
  * @returns {Signal} A `Signal` that emits the value of the specified query parameter, or `null` if it's not present.
  */
 export function injectQueryParams(key: string): Signal<string | null>;
+
+/**
+ * The `injectQueryParams` function allows you to access and manipulate query parameters from the current route.
+ *
+ * @param {string} key - The name of the query parameter to retrieve.
+ * @param {QueryParamsOptions} options - Optional configuration options for the query parameter.
+ * @returns {Signal} A `Signal` that emits the transformed value of the specified query parameter.
+ * If `required` is `true`, a runtime error is thrown when the parameter is absent, and the return type is narrowed to `ReadT`.
+ * Otherwise, `null` is returned when the parameter is absent.
+ */
+export function injectQueryParams<ReadT>(
+	key: string,
+	options: QueryParamsOptions<ReadT, ReadT> & { required: true },
+): Signal<ReadT>;
 
 /**
  * The `injectQueryParams` function allows you to access and manipulate query parameters from the current route.
@@ -96,6 +115,7 @@ export function injectQueryParams<ReadT>(
  * const idParam = injectQueryParams('id', {parse: numberAttribute}); // returns the value fo the 'id' query params and parses it into a number
  * const idParam = injectQueryParams(p => numberAttribute(p['id'])); // same as above but can be used with a custom transform function
  * const queryParams = injectQueryParams(); // returns the entire query params object
+ * const requiredSearch = injectQueryParams('search', { required: true }); // throws at runtime if 'search' is absent, return type is Signal<string>
  */
 export function injectQueryParams<ReadT>(
 	keyOrParamsTransform?: string | ((params: Params) => ReadT),
@@ -105,7 +125,7 @@ export function injectQueryParams<ReadT>(
 		const route = inject(ActivatedRoute);
 		const queryParams = route.snapshot.queryParams || {};
 
-		const { parse, transform, initialValue, defaultValue } = options;
+		const { parse, transform, initialValue, defaultValue, required } = options;
 
 		if (!keyOrParamsTransform) {
 			return toSignal(route.queryParams, { initialValue: queryParams });
@@ -124,11 +144,21 @@ export function injectQueryParams<ReadT>(
 				| undefined;
 
 			if (!param) {
+				if (required) {
+					throw new Error(
+						`injectQueryParams: required query parameter '${keyOrParamsTransform}' is missing.`,
+					);
+				}
 				return defaultValue ?? initialValue ?? null;
 			}
 
 			if (Array.isArray(param)) {
 				if (param.length < 1) {
+					if (required) {
+						throw new Error(
+							`injectQueryParams: required query parameter '${keyOrParamsTransform}' is missing.`,
+						);
+					}
 					return defaultValue ?? initialValue ?? null;
 				}
 				return parse
@@ -158,10 +188,21 @@ export namespace injectQueryParams {
 	 * @param {QueryParamsOptions} options - Optional configuration options for the array query parameter.
 	 * @returns {Signal} A `Signal` that emits an array of values for the specified query parameter, or `null` if it's not present.
 	 */
-	export function array(
+	export function array(key: string): Signal<string[] | null>;
+
+	/**
+	 * Retrieve an array query parameter with optional configuration options.
+	 *
+	 * @param {string} key - The name of the array query parameter to retrieve.
+	 * @param {QueryParamsOptions} options - Optional configuration options for the array query parameter.
+	 * @returns {Signal} A `Signal` that emits an array of values for the specified query parameter.
+	 * If `required` is `true`, a runtime error is thrown when the parameter is absent, and the return type is narrowed to `ReadT[]`.
+	 * Otherwise, `null` is returned when the parameter is absent.
+	 */
+	export function array<ReadT>(
 		key: string,
-		options?: QueryParamsOptions<string, string[]>,
-	): Signal<string[] | null>;
+		options: QueryParamsOptions<ReadT, ReadT[]> & { required: true },
+	): Signal<ReadT[]>;
 
 	/**
 	 * Retrieve an array query parameter with optional configuration options.
@@ -191,16 +232,27 @@ export namespace injectQueryParams {
 			const route = inject(ActivatedRoute);
 			const queryParams = route.snapshot.queryParams || {};
 
-			const { parse, transform, initialValue, defaultValue } = options;
+			const { parse, transform, initialValue, defaultValue, required } =
+				options;
 
 			const transformParam = (
 				param: string | string[] | null,
 			): (ReadT | string)[] | null => {
 				if (!param) {
+					if (required) {
+						throw new Error(
+							`injectQueryParams.array: required query parameter '${key}' is missing.`,
+						);
+					}
 					return defaultValue ?? initialValue ?? null;
 				}
 				if (Array.isArray(param)) {
 					if (param.length < 1) {
+						if (required) {
+							throw new Error(
+								`injectQueryParams.array: required query parameter '${key}' is missing.`,
+							);
+						}
 						return defaultValue ?? initialValue ?? null;
 					}
 					// Avoid passing the parse function directly into the map function,

@@ -55,11 +55,30 @@ export class SearchComponent {
 	}
 }
 
+@Component({
+	standalone: true,
+	template: ``,
+})
+export class RequiredSearchComponent {
+	reqParam = injectQueryParams('req', { required: true });
+}
+
+@Component({
+	standalone: true,
+	template: ``,
+})
+export class RequiredArraySearchComponent {
+	reqParams = injectQueryParams.array('req', { required: true });
+}
+
 describe(injectQueryParams.name, () => {
 	beforeEach(async () => {
 		TestBed.configureTestingModule({
 			providers: [
-				provideRouter([{ path: 'search', component: SearchComponent }]),
+				provideRouter([
+					{ path: 'search', component: SearchComponent },
+					{ path: 'required-search', component: RequiredSearchComponent },
+				]),
 			],
 		});
 	});
@@ -170,13 +189,38 @@ describe(injectQueryParams.name, () => {
 		expect(instance.searchParamDefault()).toEqual('Angular');
 		expect(instance.paramKeysList()).toEqual(['query']);
 	});
+
+	it('throws an error if a required query parameter is missing', async () => {
+		const harness = await RouterTestingHarness.create();
+
+		await expect(harness.navigateByUrl('/required-search')).rejects.toThrow(
+			"injectQueryParams: required query parameter 'req' is missing.",
+		);
+	});
+
+	it('returns a signal with the value if a required query parameter is present', async () => {
+		const harness = await RouterTestingHarness.create();
+
+		const instance = await harness.navigateByUrl(
+			'/required-search?req=must-have',
+			RequiredSearchComponent,
+		);
+
+		expect(instance.reqParam()).toEqual('must-have');
+	});
 });
 
 describe(injectQueryParams.array.name, () => {
 	beforeEach(async () => {
 		TestBed.configureTestingModule({
 			providers: [
-				provideRouter([{ path: 'search', component: SearchComponent }]),
+				provideRouter([
+					{ path: 'search', component: SearchComponent },
+					{
+						path: 'required-array-search',
+						component: RequiredArraySearchComponent,
+					},
+				]),
 			],
 		});
 	});
@@ -339,5 +383,26 @@ describe(injectQueryParams.array.name, () => {
 
 		expect(instance.queryParams()).toEqual({ query: ['Angular', 'React'] });
 		expect(instance.searchParams()).toEqual(['Angular', 'React']);
+	});
+
+	it('throws an error if a required array query parameter is missing', async () => {
+		const harness = await RouterTestingHarness.create();
+
+		await expect(
+			harness.navigateByUrl('/required-array-search'),
+		).rejects.toThrow(
+			"injectQueryParams.array: required query parameter 'req' is missing.",
+		);
+	});
+
+	it('returns a signal with the values if a required array query parameter is present', async () => {
+		const harness = await RouterTestingHarness.create();
+
+		const instance = await harness.navigateByUrl(
+			'/required-array-search?req=must-have&req=also-this',
+			RequiredArraySearchComponent,
+		);
+
+		expect(instance.reqParams()).toEqual(['must-have', 'also-this']);
 	});
 });
